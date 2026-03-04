@@ -41,6 +41,7 @@ Example `updator.json`:
     "sections": {
         "description": "My awesome plugin description"
     }
+    ...
 }
 ```
 
