@@ -21,38 +21,56 @@ class PUCLMFWCServer {
     private $menu_slug = 'puc-lmfwc-server';
     
     public static function get_instance() {
-        if ( null === self::$instance ) {
-            self::$instance = new self();
+        try {
+            if ( null === self::$instance ) {
+                self::$instance = new self();
+            }
+            return self::$instance;
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred in get_instance: ' . $e->getMessage());
+            return null;
         }
-        return self::$instance;
     }
     
     private function __construct() {
-        add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
-        add_action( 'admin_init', array( $this, 'handle_form_submission' ) );
-        // add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
-        
-        // Add request handling
-        add_action( 'parse_request', array( $this, 'maybe_handle_endpoint_request' ) );
+        try {
+            add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
+            add_action( 'admin_init', array( $this, 'handle_form_submission' ) );
+            // add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
+            
+            // Add request handling
+            add_action( 'parse_request', array( $this, 'maybe_handle_endpoint_request' ) );
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred in constructor: ' . $e->getMessage());
+        }
     }
     
     public function add_admin_menu() {
-        add_menu_page( 
-            'PUC LMFWC Server',
-            'PUC LMFWC Server',
-            'manage_options',
-            $this->menu_slug,
-            array( $this, 'render_admin_page' ),
-            'dashicons-update',
-            80
-         );
+        try {
+            add_menu_page( 
+                'PUC LMFWC Server',
+                'PUC LMFWC Server',
+                'manage_options',
+                $this->menu_slug,
+                array( $this, 'render_admin_page' ),
+                'dashicons-update',
+                80
+             );
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when adding admin menu: ' . $e->getMessage());
+        }
     }
     
     public static function puc_lmfwc_server_log_info(  $message  ) {
-        $can_log_info = get_option(  'puc_lmfwc_server_can_log_info', false  );
-        if (  $can_log_info  ) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Informational logging controlled by admin setting
-            error_log(  'ℹ️ INFO 🖥️ 📦 ' . $message  );
+        try {
+            $can_log_info = get_option(  'puc_lmfwc_server_can_log_info', false  );
+            if (  $can_log_info  ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Informational logging controlled by admin setting
+                error_log(  'ℹ️ INFO 🖥️ 📦 ' . $message  );
+            }
+        } catch (Exception $e) {
+            // Silently fail for logging function to avoid infinite loops
+            // Don't log the error here to avoid recursion
         }
     }
 
@@ -60,46 +78,54 @@ class PUCLMFWCServer {
      * Check if current request matches any registered endpoint and handle it
      */
     public function maybe_handle_endpoint_request() {
-        // Get the current request path
-        $request_uri = $_SERVER['REQUEST_URI'];
-        $parsed_url = parse_url( $request_uri );
-        $path = isset( $parsed_url['path'] ) ? $parsed_url['path'] : '';
-        
-        // Remove leading/trailing slashes
-        $path = trim( $path, '/' );
-        
-        // Get all registered endpoints
-        $endpoints = $this->get_endpoints();
-        
-        // Check if the path matches any endpoint
-        foreach ( $endpoints as $endpoint => $data ) {
-            if ( $path === $endpoint ) {
-                self::puc_lmfwc_server_log_info( "Endpoint matched: {$endpoint}" );
-                self::puc_lmfwc_server_log_info( "Request URI: {$request_uri}" );
-                self::puc_lmfwc_server_log_info( "GET parameters: " . print_r( $_GET, true ) );
-                $this->handle_endpoint_request( $endpoint, $data );
-                exit; // Stop further processing
+        try {
+            // Get the current request path
+            $request_uri = $_SERVER['REQUEST_URI'];
+            $parsed_url = parse_url( $request_uri );
+            $path = isset( $parsed_url['path'] ) ? $parsed_url['path'] : '';
+            
+            // Remove leading/trailing slashes
+            $path = trim( $path, '/' );
+            
+            // Get all registered endpoints
+            $endpoints = $this->get_endpoints();
+            
+            // Check if the path matches any endpoint
+            foreach ( $endpoints as $endpoint => $data ) {
+                if ( $path === $endpoint ) {
+                    self::puc_lmfwc_server_log_info( "Endpoint matched: {$endpoint}" );
+                    self::puc_lmfwc_server_log_info( "Request URI: {$request_uri}" );
+                    self::puc_lmfwc_server_log_info( "GET parameters: " . print_r( $_GET, true ) );
+                    $this->handle_endpoint_request( $endpoint, $data );
+                    exit; // Stop further processing
+                }
             }
+
+            self::puc_lmfwc_server_log_info( "No endpoint matched for path: {$path}" );
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to check the endpoint request: ' . $e->getMessage());
         }
-        
-        self::puc_lmfwc_server_log_info( "No endpoint matched for path: {$path}" );
     }
 
     /**
      * Handle request for a specific endpoint
      */
     private function handle_endpoint_request( $endpoint, $endpoint_data ) {
-        self::puc_lmfwc_server_log_info( "Handling request for endpoint: {$endpoint}" );
-        
-        // Check if this is a download request ( second endpoint call )
-        $is_download = isset( $_GET['download'] ) && $_GET['download'] === '1';
-        
-        self::puc_lmfwc_server_log_info( "Is download request: " . ( $is_download ? 'yes' : 'no' ) );
-        
-        if ( $is_download ) {
-            $this->handle_download_request( $endpoint, $endpoint_data );
-        } else {
-            $this->handle_update_info_request( $endpoint, $endpoint_data );
+        try {
+            self::puc_lmfwc_server_log_info( "Handling request for endpoint: {$endpoint}" );
+            
+            // Check if this is a download request ( second endpoint call )
+            $is_download = isset( $_GET['download'] ) && $_GET['download'] === '1';
+            
+            self::puc_lmfwc_server_log_info( "Is download request: " . ( $is_download ? 'yes' : 'no' ) );
+            
+            if ( $is_download ) {
+                $this->handle_download_request( $endpoint, $endpoint_data );
+            } else {
+                $this->handle_update_info_request( $endpoint, $endpoint_data );
+            }
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to handle the endpoint request: ' . $e->getMessage());
         }
     }
 
@@ -107,84 +133,90 @@ class PUCLMFWCServer {
      * Handle update information request ( first endpoint call )
      */
     private function handle_update_info_request( $endpoint, $endpoint_data ) {
-        self::puc_lmfwc_server_log_info( "Handling update info request for endpoint: {$endpoint}" );
+        try {
+            self::puc_lmfwc_server_log_info( "Handling update info request for endpoint: {$endpoint}" );
         
-        // Check if license validation is enabled
-        if ( $endpoint_data['validate_license'] ) {
-            // Get license key from request
-            $license_key = isset( $_GET['license'] ) ? sanitize_text_field( $_GET['license'] ) : '';
-            if ( empty( $license_key ) ){
-                $this->send_error_response( 'Invalid license: No license key provided',  401 );
+            // Check if license validation is enabled
+            if ( $endpoint_data['validate_license'] ) {
+                // Get license key from request
+                $license_key = isset( $_GET['license'] ) ? sanitize_text_field( $_GET['license'] ) : '';
+                if ( empty( $license_key ) ){
+                    $this->send_error_response( 'Invalid license: No license key provided',  401 );
+                    return;
+                }
+
+                // Get the product ID from endpoint configuration
+                $endpoint_product_id = isset( $endpoint_data['product_id'] ) ? $endpoint_data['product_id'] :   null;
+
+                $license_valid = $this->validate_license( $license_key, $endpoint_product_id );
+                if ( !$license_valid ) {
+                    $this->send_error_response( 'Invalid license or license does not match the requested    product', 401 );
+                    return;
+                }
+            }
+        
+        
+            // Load and return the updator.json content
+            $updator_path = $endpoint_data['updator_path'];
+            
+            if ( !file_exists( $updator_path ) ) {
+                self::puc_lmfwc_server_log_info( "Updator.json file not found" );
+                $this->send_error_response( 'Updator.json file not found', 409);
                 return;
             }
             
-            // Get the product ID from endpoint configuration
-            $endpoint_product_id = isset( $endpoint_data['product_id'] ) ? $endpoint_data['product_id'] : null;
+            $json_content = file_get_contents( $updator_path );
+            $data = json_decode( $json_content, true );
             
-            $license_valid = $this->validate_license( $license_key, $endpoint_product_id );
-            if ( !$license_valid ) {
-                $this->send_error_response( 'Invalid license or license does not match the requested product', 401 );
+            if ( $data === null ) {
+                self::puc_lmfwc_server_log_info( "Invalid JSON in updator.json" );
+                $this->send_error_response( 'Invalid JSON in updator.json', 409 );
                 return;
             }
-        }
-        
-        // Load and return the updator.json content
-        $updator_path = $endpoint_data['updator_path'];
-        
-        if ( !file_exists( $updator_path ) ) {
-            self::puc_lmfwc_server_log_info( "Updator.json file not found" );
-            $this->send_error_response( 'Updator.json file not found', 409);
-            return;
-        }
-        
-        $json_content = file_get_contents( $updator_path );
-        $data = json_decode( $json_content, true );
-        
-        if ( $data === null ) {
-            self::puc_lmfwc_server_log_info( "Invalid JSON in updator.json" );
-            $this->send_error_response( 'Invalid JSON in updator.json', 409 );
-            return;
-        }
-        
-        // Modify download_url to include the endpoint for the second call
-        // We need to intercept ALL downloads to serve files from protected locations
-        // and to handle license validation for endpoints that require it
-        if ( isset( $data['download_url'] ) ) {
-            self::puc_lmfwc_server_log_info( "Original download_url: " . $data['download_url'] );
-            $current_url = home_url( '/' . $endpoint );
             
-            // Get all current query parameters (preserve everything except 'download')
-            $query_params = $_GET;
-            
-            // Remove 'download' parameter if it exists (we'll add it fresh)
-            if ( isset( $query_params['download'] ) ) {
-                unset( $query_params['download'] );
+            // Modify download_url to include the endpoint for the second call
+            // We need to intercept ALL downloads to serve files from protected locations
+            // and to handle license validation for endpoints that require it
+            if ( isset( $data['download_url'] ) ) {
+                self::puc_lmfwc_server_log_info( "Original download_url: " . $data['download_url'] );
+                $current_url = home_url( '/' . $endpoint );
+                
+                // Get all current query parameters (preserve everything except 'download')
+                $query_params = $_GET;
+                
+                // Remove 'download' parameter if it exists (we'll add it fresh)
+                if ( isset( $query_params['download'] ) ) {
+                    unset( $query_params['download'] );
+                }
+                
+                // Add 'download=1' to the parameters
+                $query_params['download'] = '1';
+                
+                // Build URL with all preserved query parameters
+                $data['download_url'] = add_query_arg( $query_params, $current_url );
+                
+                self::puc_lmfwc_server_log_info( "Modified download_url: " . $data['download_url'] );
+                self::puc_lmfwc_server_log_info( "Preserved query parameters: " . print_r( $query_params,   true ) );
             }
             
-            // Add 'download=1' to the parameters
-            $query_params['download'] = '1';
-            
-            // Build URL with all preserved query parameters
-            $data['download_url'] = add_query_arg( $query_params, $current_url );
-            
-            self::puc_lmfwc_server_log_info( "Modified download_url: " . $data['download_url'] );
-            self::puc_lmfwc_server_log_info( "Preserved query parameters: " . print_r( $query_params, true ) );
-        }
+            // Send JSON response
+            header( 'Content-Type: application/json' );
+            $json_data = json_encode( $data );
+            echo $json_data;
         
-        // Send JSON response
-        header( 'Content-Type: application/json' );
-        $json_data = json_encode( $data );
-        echo $json_data;
-
-        self::puc_lmfwc_server_log_info("Returning PUC check JSON: {$json_data}");
-
-        exit;
+            self::puc_lmfwc_server_log_info("Returning PUC check JSON: {$json_data}");
+        
+            exit;
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to handle update info request: ' . $e->getMessage());
+        }
     }
 
     /**
      * Handle download request ( second endpoint call )
      */
     private function handle_download_request( $endpoint, $endpoint_data ) {
+        try {
         self::puc_lmfwc_server_log_info( "Handling download request for endpoint: {$endpoint}" );
 
         // Check if license validation is enabled
@@ -229,12 +261,16 @@ class PUCLMFWCServer {
         
         // Serve the file
         $this->serve_download( $download_url );
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to handle download request: ' . $e->getMessage());
+        } 
     }
 
     /**
      * Validate license using License Manager for WooCommerce
      */
     private function validate_license( $license_key, $endpoint_product_id = null ) {
+        try {
         self::puc_lmfwc_server_log_info( "Validating license" );
         self::puc_lmfwc_server_log_info( "Endpoint Product ID: " . ( $endpoint_product_id ? $endpoint_product_id : 'not set' ) );
         
@@ -306,12 +342,17 @@ class PUCLMFWCServer {
         
         self::puc_lmfwc_server_log_info( "License is valid: {$license_key}" );
         return true;
+        }
+        catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to validate license: ' . $e->getMessage());
+        }
     }
 
     /**
      * Serve download file
      */
     private function serve_download( $download_url ) {
+        try {
         self::puc_lmfwc_server_log_info( "Serving download from URL: {$download_url}" );
         self::puc_lmfwc_server_log_info( "Site URL: " . site_url() );
         self::puc_lmfwc_server_log_info( "ABSPATH: " . ABSPATH );
@@ -343,32 +384,48 @@ class PUCLMFWCServer {
         // External URL - redirect
         wp_redirect( $download_url );
         exit;
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to serve download: ' . $e->getMessage());
+        }
     }
 
     /**
      * Send error response
      */
     private function send_error_response( $message, $response_code = 400 ) {
+        try {
         self::puc_lmfwc_server_log_info( "Error response: {$message}" );
         
         header( 'Content-Type: application/json' );
         http_response_code( $response_code );
         echo json_encode( array( 'error' => $message ) );
         exit;
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to send error response: ' . $e->getMessage());
+        }
     }
 
     public function get_endpoints() {
+        try{
         $endpoints = get_option( $this->puc_lmfwc_server_endpoints_option, array() );
         self::puc_lmfwc_server_log_info( 'Retrieving endpoints: ' . json_encode( $endpoints ) );
         return is_array( $endpoints ) ? $endpoints : array();
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to get endpoints: ' . $e->getMessage());
+        }
     }
     
     public function save_endpoints( $endpoints ) {
+        try {
         self::puc_lmfwc_server_log_info( 'Saving endpoints: ' . json_encode( $endpoints ) );
         update_option( $this->puc_lmfwc_server_endpoints_option, $endpoints );
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to save endpoints: ' . $e->getMessage());
+        }
     }
     
     public function handle_form_submission() {
+        try {
         if ( !isset( $_POST['puc_lmfwc_nonce'] ) || !isset( $_POST['action'] ) ) {
             return;
         }
@@ -395,9 +452,13 @@ class PUCLMFWCServer {
         } elseif ( $action === 'toggle_logging' ) {
             $this->toggle_logging();
         }
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to handle form submission: ' . $e->getMessage());
+        } 
     }
     
     private function add_new_endpoint() {
+        try {
         $endpoint = sanitize_text_field( $_POST['endpoint'] );
         $updator_path = sanitize_text_field( $_POST['updator_path'] );
         $validate_license = isset( $_POST['validate_license'] ) ? 1 : 0;
@@ -491,9 +552,13 @@ class PUCLMFWCServer {
         // Redirect to clear POST data and prevent refresh issues
         wp_redirect( add_query_arg( 'page', $this->menu_slug, admin_url( 'admin.php' ) ) );
         exit;
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to add new endpoint: ' . $e->getMessage());
+        }
     }
     
     private function edit_endpoint() {
+        try {
         if ( !isset( $_POST['endpoint_to_edit'] ) ) {
             return;
         }
@@ -568,9 +633,14 @@ class PUCLMFWCServer {
         // Redirect to clear POST data and prevent refresh issues
         wp_redirect( add_query_arg( 'page', $this->menu_slug, admin_url( 'admin.php' ) ) );
         exit;
+        }
+        catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to edit end point: ' . $e->getMessage());
+        }
     }
     
     private function delete_endpoint() {
+        try {
         if ( !isset( $_POST['endpoint_to_delete'] ) ) {
             return;
         }
@@ -600,9 +670,13 @@ class PUCLMFWCServer {
         // Redirect to clear POST data and prevent refresh issues
         wp_redirect( add_query_arg( 'page', $this->menu_slug, admin_url( 'admin.php' ) ) );
         exit;
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to delete endpoint: ' . $e->getMessage());
+        }
     }
     
     private function toggle_logging() {
+        try {
         $current_value = get_option( 'puc_lmfwc_server_can_log_info', false );
         $new_value = !$current_value;
         
@@ -618,31 +692,36 @@ class PUCLMFWCServer {
         
         // Log the change
         self::puc_lmfwc_server_log_info( "Informational logging has been $status." );
+        }
+        catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when trying to toggle logging: ' . $e->getMessage());
+        }
     }
     
     public function render_admin_page() {
-        $endpoints = $this->get_endpoints();
-        $logging_enabled = get_option( 'puc_lmfwc_server_can_log_info', false );
-        
-        // Check if we're in edit mode
-        $is_edit_mode = false;
-        $endpoint_to_edit = '';
-        $endpoint_data = array();
-        
-        // Only show edit form if we're clicking "Edit" button, not after submitting the edit form
-        if ( isset( $_POST['action'] ) && $_POST['action'] === 'show_edit_endpoint' && isset( $_POST['endpoint_to_edit'] ) ) {
-            $is_edit_mode = true;
-            $endpoint_to_edit = sanitize_text_field( $_POST['endpoint_to_edit'] );
-            if ( isset( $endpoints[$endpoint_to_edit] ) ) {
-                $endpoint_data = $endpoints[$endpoint_to_edit];
-            }
-        }
-        
-        // If we just submitted an edit form, don't show edit mode
-        if ( isset( $_POST['action'] ) && $_POST['action'] === 'edit_endpoint' ) {
+        try {
+            $endpoints = $this->get_endpoints();
+            $logging_enabled = get_option( 'puc_lmfwc_server_can_log_info', false );
+            
+            // Check if we're in edit mode
             $is_edit_mode = false;
-        }
-        ?>
+            $endpoint_to_edit = '';
+            $endpoint_data = array();
+            
+            // Only show edit form if we're clicking "Edit" button, not after submitting the edit form
+            if ( isset( $_POST['action'] ) && $_POST['action'] === 'show_edit_endpoint' && isset( $_POST['endpoint_to_edit'] ) ) {
+                $is_edit_mode = true;
+                $endpoint_to_edit = sanitize_text_field( $_POST['endpoint_to_edit'] );
+                if ( isset( $endpoints[$endpoint_to_edit] ) ) {
+                    $endpoint_data = $endpoints[$endpoint_to_edit];
+                }
+            }
+            
+            // If we just submitted an edit form, don't show edit mode
+            if ( isset( $_POST['action'] ) && $_POST['action'] === 'edit_endpoint' ) {
+                $is_edit_mode = false;
+            }
+            ?>
         <div class="wrap">
             <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
             
@@ -1008,6 +1087,10 @@ class PUCLMFWCServer {
         }
         </style>
         <?php
+        } catch (Exception $e) {
+            error_log('PUC LMFWC Server: An error occurred when rendering admin page: ' . $e->getMessage());
+            echo '<div class="wrap"><h1>Error</h1><p>An error occurred while loading the admin page. Please check the error logs.</p></div>';
+        }
     }
 }
 
@@ -1016,21 +1099,29 @@ PUCLMFWCServer::get_instance();
 
 // Register activation hook
 register_activation_hook( __FILE__, function() {
-    // Ensure our option exists
-    if ( !get_option( 'puc_lmfwc_server_endpoints' ) ) {
-        update_option( 'puc_lmfwc_server_endpoints', array() );
-    }
-    
-    // Initialize logging option if it doesn't exist
-    if ( get_option( 'puc_lmfwc_server_can_log_info' ) === false ) {
-        update_option( 'puc_lmfwc_server_can_log_info', false );
+    try {
+        // Ensure our option exists
+        if ( !get_option( 'puc_lmfwc_server_endpoints' ) ) {
+            update_option( 'puc_lmfwc_server_endpoints', array() );
+        }
+        
+        // Initialize logging option if it doesn't exist
+        if ( get_option( 'puc_lmfwc_server_can_log_info' ) === false ) {
+            update_option( 'puc_lmfwc_server_can_log_info', false );
+        }
+    } catch (Exception $e) {
+        error_log('PUC LMFWC Server: An error occurred during activation: ' . $e->getMessage());
     }
 } );
 
 // Register deactivation hook  
 register_deactivation_hook( __FILE__, function() {
-    // Optionally clean up on deactivation
-    // delete_option( 'puc_lmfwc_server_endpoints' );
+    try {
+        // Optionally clean up on deactivation
+        // delete_option( 'puc_lmfwc_server_endpoints' );
+    } catch (Exception $e) {
+        error_log('PUC LMFWC Server: An error occurred during deactivation: ' . $e->getMessage());
+    }
 } );
 
 ?>
