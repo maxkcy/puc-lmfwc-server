@@ -24,7 +24,7 @@ A WordPress plugin that integrates Plugin Update Checker (PUC) with License Mana
    - **Validate License**: Enable to require license validation
    - **Product ID**: (Optional) Specific product ID for license validation
 
-![Add Endpoint Screenshot](screenshots/11.png)
+![Add Endpoint Screenshot](screenshots/1.png)
 ![Endpoint Screenshot](screenshots/2.png)
 
 ### 3. Prepare Your Updator.json File
